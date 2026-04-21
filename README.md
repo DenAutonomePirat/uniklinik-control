@@ -55,7 +55,14 @@ server:
 
 ## Raspberry Pi Setup
 
-### 1. Update System
+### 1. Flash SD Card
+- Download [Raspberry Pi Imager](https://www.raspberrypi.com/software/)
+- Use the **32-bit Lite** image (no desktop included)
+- Enable SSH in Advanced Options
+
+---
+
+### 2. Update System
 ```bash
 sudo apt update && sudo apt full-upgrade -y
 sudo reboot
@@ -65,7 +72,7 @@ sudo reboot
 
 ---
 
-### 2. Install Desktop Environment & Browser
+### 3. Install Desktop Environment & Browser
 ```bash
 sudo apt install --no-install-recommends \
   xserver-xorg \
@@ -81,7 +88,7 @@ sudo apt install --no-install-recommends \
 
 ---
 
-### 3. Configure Auto-Login (LightDM)
+### 4. Configure Auto-Login (LightDM)
 ```bash
 sudo nano /etc/lightdm/lightdm.conf
 ```
@@ -97,7 +104,7 @@ autologin-session=openbox
 
 ---
 
-### 4. Configure Openbox Auto-Start
+### 5. Configure Openbox Auto-Start
 ```bash
 mkdir -p ~/.config/openbox
 nano ~/.config/openbox/autostart
@@ -113,7 +120,7 @@ chromium --kiosk --incognito http://localhost:8080
 
 ---
 
-### 5. Enable GUI Boot
+### 6. Enable GUI Boot
 ```bash
 sudo systemctl enable lightdm
 sudo systemctl set-default graphical.target
@@ -123,7 +130,7 @@ sudo systemctl set-default graphical.target
 
 ---
 
-### 6. Install Application
+### 7. Install Application
 ```bash
 sudo mkdir -p /opt/uniklinik
 sudo cp uniklinik-control /opt/uniklinik/
@@ -136,7 +143,7 @@ sudo chown -R uniklinik:uniklinik /opt/uniklinik
 
 ---
 
-### 7. Create Systemd Service
+### 8. Create Systemd Service
 ```bash
 sudo nano /etc/systemd/system/uniklinik-control.service
 ```
@@ -171,7 +178,7 @@ WantedBy=multi-user.target
 
 ---
 
-### 8. Enable and Start Service
+### 9. Enable and Start Service
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable uniklinik-control
@@ -180,7 +187,7 @@ sudo systemctl start uniklinik-control
 
 ---
 
-### 9. Check Service Status
+### 10. Check Service Status
 ```bash
 systemctl status uniklinik-control
 ```
