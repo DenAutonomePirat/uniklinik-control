@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dual Camera Controller</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body>
+    <header>
+        <h1>Dual Camera Controller</h1>
+        <div id="connection-status" class="disconnected">Disconnected</div>
+    </header>
+
+    <main>
+        <div class="session-container">
+            <h2 class="section-title">Session Controls</h2>
+            <div id="session-control" class="section">
+                <form id="session-form">
+                    <div class="form-group">
+                        <label for="client-id">Klient ID</label>
+                        <input type="text" id="client-id" name="client-id" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="psychologist-id">Psykolog ID</label>
+                        <input type="text" id="psychologist-id" name="psychologist-id" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="session-number">Sessions nummer</label>
+                        <input type="text" id="session-number" name="session-number" required>
+                    </div>
+                    <div id="validation-messages" class="validation-messages"></div>
+                    <div class="session-buttons">
+                        <button type="button" id="start-session" disabled>Start Session Recording</button>
+                        <button type="button" id="end-session" disabled>End Session Recording</button>
+                    </div>
+                </form>
+            </div>
+            <div class="cameras-container">
+                <h2 class="section-title">Camera Controls</h2>
+                <div id="camera-controls">
+                    <!-- Camera controls will be dynamically generated here -->
+                </div>
+            </div>
+    </main>
+
+    <footer>
+        <p> Universitets klinikken 2026 </p>
+    </footer>
+
+    <script src="/static/js/app.js"></script>
+</body>
+
+</html>

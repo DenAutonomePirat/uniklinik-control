@@ -1,0 +1,17 @@
+cameras:
+  - name: "Camera 1"
+    hostname: "172.24.135.80"
+    username: "uniklinik"
+    password: "xJBml4nVqubV"
+  - name: "Camera 2"
+    hostname: "172.24.135.81"
+    username: "uniklinik"
+    password: "xJBml4nVqubV"
+
+server:
+  port: 8081
+  host: "localhost"
+  
+ltc:
+  filePath: "./assets/LTC_01000000_120mins_30fps_44100x16.wav"
+  preRollSeconds: 5
