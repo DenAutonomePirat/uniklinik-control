@@ -192,6 +192,64 @@ sudo systemctl start uniklinik-control
 systemctl status uniklinik-control
 ```
 
+---
+
+### 11. Enable Read-Only Filesystem (OverlayFS)
+```bash
+sudo raspi-config
+```
+Navigate:
+- **Performance Options** → **Overlay Filesystem** → **Enable overlay filesystem: YES**
+- **Make root filesystem read-only: YES**
+- **Make boot filesystem read-only: NO**
+
+Then reboot when prompted:
+```bash
+sudo reboot
+```
+
+This protects the SD card from write wear and enables safe power-off.
+
+---
+
+## Hardening
+
+### Disable WiFi and Bluetooth
+Edit `/boot/firmware/config.txt`:
+```ini
+# Disable WiFi
+dtoverlay=disable-wifi
+
+# Disable Bluetooth
+dtoverlay=disable-bt
+```
+
+### Disable Unnecessary Services
+```bash
+sudo systemctl disable bluetooth
+sudo systemctl disable wifi-scan
+sudo systemctl mask avahi-daemon
+```
+
+### Change Default Password
+```bash
+passwd uniklinik
+```
+
+### Secure SSH (if enabled)
+1. Use SSH keys instead of password
+2. Edit `/etc/ssh/sshd_config`:
+```bash
+PasswordAuthentication no
+PermitRootLogin no
+```
+3. Restart: `sudo systemctl restart ssh`
+
+### Disable Serial Console
+```bash
+sudo systemctl disable serial-getty@ttyS0
+```
+
 ### Useful Commands
 ```bash
 # View logs
@@ -206,7 +264,7 @@ sudo systemctl stop uniklinik-control
 
 ## License
 
-This project is licensed under the GNU GPL v3 License - see the LICENSE file for details.
+This project is licensed under the [GNU GPL v3 License](https://www.gnu.org/licenses/gpl-3.0.html).
 
 ## Acknowledgments
 
