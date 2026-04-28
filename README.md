@@ -252,6 +252,9 @@ sudo systemctl disable serial-getty@ttyS0
 
 ### Useful Commands
 ```bash
+# Build for raspberry
+env GOARCH=arm64 GOOS=linux go build -o uniklinik-control main.go
+
 # View logs
 journalctl -u uniklinik-control -f
 
