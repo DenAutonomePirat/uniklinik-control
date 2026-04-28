@@ -2,535 +2,499 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize the application
     initApp();
     
-    // Set up polling for only processing status
-    setInterval(updateProcessingStatus, 1000);
+    // Set up polling for camera status updates
+    setInterval(updateCameraStatus, 5000);
     
-    // Set up event listeners
-    document.getElementById('start-button').addEventListener('click', startProcessing);
-    
-    // Add refresh button for manual disk updates
-    addDiskRefreshButton();
-    
-    // Add button to find matches
-    addFindMatchesButton();
+    // Initialize session control form
+    initSessionForm();
 });
 
-// Global state
-let disks = [];
-let tasks = [];
-let processingStatus = {
-    inProgress: false,
-    message: 'Ready',
-    progress: 0,
-    error: ''
+// Global state to track camera status
+let cameraStatus = [];
+
+// Session information
+let sessionInfo = {
+    clientId: '',
+    psychologistId: '',
+    sessionNumber: ''
 };
 
-// keep previous processing state so we can detect transitions
-let prevProcessingInProgress = false;
-let matchingFiles = {};
-
-// Function to update all button states based on current app state
-function updateAllButtonStates() {
-    updateStartButtonState();
-    updateRefreshButtonState();
-    updateFindMatchesButtonState();
-}
-
-// Function to update button state based on current selections
-function updateStartButtonState() {
-    const startButton = document.getElementById('start-button');
-    const selectedTasks = document.querySelectorAll('.task-item.selected');
-    const hasDisks = disks.length > 0;
-    const isProcessing = processingStatus.inProgress;
-
-    // Enable only if disks are present, at least one task is selected, and not currently processing
-    const shouldEnable = hasDisks && selectedTasks.length > 0 && !isProcessing;
-    
-    startButton.disabled = !shouldEnable;
-    startButton.textContent = isProcessing ? 'Processing...' : 'Start Processing';
-    
-    console.log(`Start button state updated: enabled=${shouldEnable}, disks=${hasDisks}, tasks=${selectedTasks.length}, processing=${isProcessing}`);
-}
-
-// Function to update refresh button state
-function updateRefreshButtonState() {
-    const refreshButton = document.getElementById('refresh-disks-button');
-    if (!refreshButton) return;
-    
-    // Refresh button is always enabled unless currently scanning
-    const isScanning = refreshButton.textContent === 'Scanning...';
-    refreshButton.disabled = isScanning;
-}
-
-// Function to update find matches button state
-function updateFindMatchesButtonState() {
-    const findMatchesButton = document.getElementById('find-matches-button');
-    if (!findMatchesButton) return;
-    
-    // Find matches button is enabled if disks are selected and not currently searching
-    const selectedDisks = document.querySelectorAll('.disk-select:checked');
-    const isSearching = findMatchesButton.textContent === 'Searching...';
-    const shouldEnable = selectedDisks.length > 0 && !isSearching;
-    
-    findMatchesButton.disabled = !shouldEnable;
-}
-
-// Initialize the application
 async function initApp() {
     try {
-        // Get initial data
-        await Promise.all([
-            updateDiskStatus(),
-            updateTasksList(),
-            updateProcessingStatus(),
-            updateMatchingFiles()
-        ]);
-        
-        console.log('Application initialized');
-        updateAllButtonStates();  // Update all button states after initialization
+        // Get initial camera status
+        await updateCameraStatus();
     } catch (error) {
         console.error('Failed to initialize app:', error);
         showError('Failed to connect to the server. Please check your connection and try again.');
     }
 }
 
-// Update disk status
-async function updateDiskStatus() {
+async function updateCameraStatus() {
+    console.log('Updating camera status...');
     try {
-        // Show loading indicator on the button
-        const refreshButton = document.getElementById('refresh-disks-button');
-        if (refreshButton) {
-            refreshButton.textContent = 'Scanning...';
-            refreshButton.disabled = true;
-        }
-        
-        const response = await fetch('/api/disks');
+        const response = await fetch('/api/cameras');
         if (!response.ok) {
             throw new Error(`Server returned ${response.status}: ${response.statusText}`);
         }
         
-        disks = await response.json();
-        renderDisks();
-        updateAllButtonStates();  // Update all button states after loading disks
+        const data = await response.json();
+        cameraStatus = data;
         
-        // Update connection status
-        document.getElementById('connection-status').className = 'connected';
-        document.getElementById('connection-status').textContent = 'Connected';
+        // Update the UI with the new camera status
+        renderCameraControls();
         
-        // Reset refresh button state
-        if (refreshButton) {
-            refreshButton.textContent = 'Scan for Disks';
-        }
-        updateRefreshButtonState();
+        // Update session buttons state based on camera status
+        updateSessionButtonsState();
     } catch (error) {
-        console.error('Failed to update disk status:', error);
-        document.getElementById('connection-status').className = 'disconnected';
-        document.getElementById('connection-status').textContent = 'Disconnected';
-        
-        // Reset refresh button state with error
-        const refreshButton = document.getElementById('refresh-disks-button');
-        if (refreshButton) {
-            refreshButton.textContent = 'Scan Failed - Try Again';
-        }
-        updateRefreshButtonState();
+        console.error('Failed to update camera status:', error);
     }
 }
-
-// Update tasks list
-async function updateTasksList() {
+async function updateSessionStatus() {
     try {
-        const response = await fetch('/api/tasks');
+        const response = await fetch('/api/session');
         if (!response.ok) {
             throw new Error(`Server returned ${response.status}: ${response.statusText}`);
         }
         
-        tasks = await response.json();
-        renderTasks();
-        updateAllButtonStates();  // Update all button states after loading tasks
+        const data = await response.json();
+        console.log('Session status:', data);
+        // Update sessionInfo or UI based on session status if needed
     } catch (error) {
-        console.error('Failed to update tasks list:', error);
+        console.error('Failed to update session status:', error);
     }
 }
-
-// Update processing status
-async function updateProcessingStatus() {
-    try {
-        const response = await fetch('/api/status');
-        if (!response.ok) {
-            throw new Error(`Server returned ${response.status}: ${response.statusText}`);
-        }
-        
-        processingStatus = await response.json();
-        renderProcessingStatus();
-        
-        // if we just finished (was true, now false) clear tasks
-        if (prevProcessingInProgress && !processingStatus.inProgress) {
-            document.querySelectorAll('.task-checkbox:checked').forEach(cb => {
-                cb.checked = false;
-                cb.closest('.task-item').classList.remove('selected');
-            });
-            console.log('Processing complete – cleared task selections');
-        }
-        prevProcessingInProgress = processingStatus.inProgress;
-        
-        // Update all button states based on processing status
-        updateAllButtonStates();
-    } catch (error) {
-        console.error('Failed to update processing status:', error);
-    }
-}
-
-// Update matching files
-async function updateMatchingFiles() {
-    try {
-        const response = await fetch('/api/matching-files');
-        if (!response.ok) {
-            throw new Error(`Server returned ${response.status}: ${response.statusText}`);
-        }
-        
-        matchingFiles = await response.json();
-        renderMatchingFiles();
-    } catch (error) {
-        console.error('Failed to update matching files:', error);
-    }
-}
-
-// Render disks
-function renderDisks() {
-    const container = document.getElementById('disks-container');
+// Update the state of session control buttons based on camera status
+function updateSessionButtonsState() {
+    const startSessionBtn = document.getElementById('start-session');
+    const endSessionBtn = document.getElementById('end-session');
     
-    if (disks.length === 0) {
-        container.innerHTML = '<p class="no-matches">No SSDs detected. Please insert SSDs to begin.</p>';
-        return;
+    if (!startSessionBtn || !endSessionBtn) return;
+    
+    // Check if any cameras are recording
+    const anyRecording = cameraStatus.some(camera => camera.recording);
+    
+    // Enable end session button if any camera is recording
+    endSessionBtn.disabled = !anyRecording;
+    
+    // If we're in a recording session, disable the start button
+    if (anyRecording && startSessionBtn.textContent !== 'Recording in progress') {
+        startSessionBtn.textContent = 'Recording in progress';
+    }
+}
+
+function initSessionForm() {
+    // Get form elements
+    const sessionForm = document.getElementById('session-form');
+    const clientIdInput = document.getElementById('client-id');
+    const psychologistIdInput = document.getElementById('psychologist-id');
+    const sessionNumberInput = document.getElementById('session-number');
+    const startSessionBtn = document.getElementById('start-session');
+    const endSessionBtn = document.getElementById('end-session');
+    
+    if (!sessionForm || !startSessionBtn || !endSessionBtn) return;
+    
+    // Add input event listeners to update session info
+    clientIdInput.addEventListener('input', () => {
+        sessionInfo.clientId = clientIdInput.value.trim();
+        validateSessionForm();
+    });
+    
+    psychologistIdInput.addEventListener('input', () => {
+        sessionInfo.psychologistId = psychologistIdInput.value.trim();
+        validateSessionForm();
+    });
+    
+    sessionNumberInput.addEventListener('input', () => {
+        sessionInfo.sessionNumber = sessionNumberInput.value.trim();
+        validateSessionForm();
+    });
+    
+    // Add session button click handlers
+    startSessionBtn.addEventListener('click', handleStartSession);
+    endSessionBtn.addEventListener('click', handleEndSession);
+    
+    // Initial validation
+    validateSessionForm();
+    updateSessionButtonsState();
+}
+
+function validateSessionForm() {
+    const startSessionBtn = document.getElementById('start-session');
+    const validationMessages = document.getElementById('validation-messages');
+    if (!startSessionBtn || !validationMessages) return;
+    
+    // Clear previous validation messages
+    validationMessages.innerHTML = '';
+    
+    // Collect all validation issues
+    const issues = [];
+    
+    // Check if all fields are filled
+    if (sessionInfo.clientId === '') {
+        issues.push('Klient ID er påkrævet');
     }
     
-    let html = '';
+    if (sessionInfo.psychologistId === '') {
+        issues.push('Psykolog ID er påkrævet');
+    }
     
-    disks.forEach(disk => {
-        // Ensure brawFiles is not null or undefined
-        const brawFiles = disk.brawFiles || [];
+    if (sessionInfo.sessionNumber === '') {
+        issues.push('Sessions nummer er påkrævet');
+    }
+    
+    const isValid = issues.length === 0;
+    
+    // Check camera conditions
+    const cameraIssues = [];
+    
+    // Check if there are any cameras
+    if (cameraStatus.length === 0) {
+        cameraIssues.push('Ingen kameraer fundet');
+    
+    } else {
+        // Check each camera's conditions
+        cameraStatus.forEach(camera => {
+            if (!camera.reachable) {
+                cameraIssues.push(`${camera.name} er ikke tilgængelig`);
+            } else if (camera.recording) {
+                cameraIssues.push(`${camera.name} optager allerede`);
+            } else if (camera.usbStatus !== 'Connected') {
+                cameraIssues.push(`${camera.name} har ingen USB-disk tilsluttet`);
+            } else if (camera.remainingRecordHours < 1.0) {
+                cameraIssues.push(`${camera.name} har mindre end 1 times optagetid tilbage`);
+            }
+        });
+    }
+    
+    const hasAvailableCameras = cameraIssues.length === 0;
+    
+    // Add all issues to the validation messages
+    [...issues, ...cameraIssues].forEach(issue => {
+        const messageElement = document.createElement('p');
+        messageElement.textContent = issue;
+        validationMessages.appendChild(messageElement);
+    });
+    
+
+
+    // Enable or disable button based on validation
+    // startSessionBtn.disabled = !isValid || !hasAvailableCameras;
+
+    //temporarily allow starting session even if cameras have issues
+    startSessionBtn.disabled = !isValid;
+    // update the button text
+    if (startSessionBtn.disabled) {
+        startSessionBtn.textContent = 'Start Session Recording';
+    }   
+
+
+}
+
+async function handleStartSession() {
+    const startSessionBtn = document.getElementById('start-session');
+    const endSessionBtn = document.getElementById('end-session');
+    const validationMessages = document.getElementById('validation-messages');
+    
+    // Disable the button to prevent multiple clicks
+    if (startSessionBtn) {
+        startSessionBtn.disabled = true;
+        startSessionBtn.textContent = 'Starting session...';
+    }
+    
+    try {
+        const response = await fetch('/api/session/start', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(sessionInfo)
+        });
         
-        html += `
-            <div class="disk-card ${disk.selected ? 'selected' : ''}" data-id="${disk.identifier}">
-                <div class="disk-header">
-                    <div class="disk-name">${disk.name || 'Unnamed Disk'}</div>
-                    <input type="checkbox" class="disk-select" ${disk.selected ? 'checked' : ''}>
+        if (!response.ok) {
+            throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Show pre-roll countdown
+            const preRollSeconds = data.preRollSeconds || 5;
+            showPrerollCountdown(preRollSeconds);
+            
+            // Schedule status update after pre-roll
+            setTimeout(async () => {
+                await updateCameraStatus();
+                if (startSessionBtn) {
+                    startSessionBtn.textContent = 'Recording in progress';
+                }
+                // Enable end session button after pre-roll
+                if (endSessionBtn) {
+                    endSessionBtn.disabled = false;
+                }
+            }, (preRollSeconds + 1) * 1000);
+        } else {
+            // Show error message if any
+            if (data.message) {
+                showError(data.message);
+            }
+            if (data.invalidCameras && data.invalidCameras.length > 0) {
+                const errorMsg = document.createElement('div');
+                errorMsg.innerHTML = '<p>Invalid cameras:</p><ul>' + 
+                    data.invalidCameras.map(cam => `<li>${cam}</li>`).join('') + 
+                    '</ul>';
+                validationMessages.appendChild(errorMsg);
+            }
+            validateSessionForm();
+        }
+    } catch (error) {
+        console.error('Failed to start session:', error);
+        showError('Failed to start recording session. Please try again.');
+        validateSessionForm();
+    }
+}
+
+// Show pre-roll countdown
+function showPrerollCountdown(seconds) {
+    const validationMessages = document.getElementById('validation-messages');
+    if (!validationMessages) return;
+    
+    // Clear previous messages
+    validationMessages.innerHTML = '';
+    
+    // Create countdown element
+    const countdownElement = document.createElement('div');
+    countdownElement.className = 'preroll-countdown';
+    countdownElement.innerHTML = `<p>Preparing timecode. Recording starts in <span id="countdown">${seconds}</span> seconds...</p>`;
+    validationMessages.appendChild(countdownElement);
+    
+    // Start countdown
+    const countdownSpan = document.getElementById('countdown');
+    let timeLeft = seconds;
+    
+    const interval = setInterval(() => {
+        timeLeft--;
+        if (countdownSpan) {
+            countdownSpan.textContent = timeLeft;
+        }
+        
+        if (timeLeft <= 0) {
+            clearInterval(interval);
+            if (countdownElement) {
+                countdownElement.innerHTML = '<p>Recording in progress with synchronized timecode...</p>';
+            }
+            
+            // Enable the end session button
+            const endSessionBtn = document.getElementById('end-session');
+            if (endSessionBtn) {
+                endSessionBtn.disabled = false;
+            }
+        }
+    }, 1000);
+}
+
+// Handle end session button click
+async function handleEndSession() {
+    // Show confirmation dialog
+    if (!confirm('Are you sure you want to end the recording session? This will stop recording on all cameras and stop the timecode.')) {
+        return; // User cancelled
+    }
+    
+    const endSessionBtn = document.getElementById('end-session');
+    const startSessionBtn = document.getElementById('start-session');
+    const validationMessages = document.getElementById('validation-messages');
+    
+    // Disable the button to prevent multiple clicks
+    if (endSessionBtn) {
+        endSessionBtn.disabled = true;
+        endSessionBtn.textContent = 'Ending session...';
+    }
+    
+    try {
+        const response = await fetch('/api/session/end', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(sessionInfo)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Clear any recording messages
+            if (validationMessages) {
+                validationMessages.innerHTML = '<div class="success-message">Session ended successfully</div>';
+            }
+            
+            // Reset button states
+            if (startSessionBtn) {
+                startSessionBtn.textContent = 'Start Session Recording';
+            }
+            
+            if (endSessionBtn) {
+                endSessionBtn.textContent = 'End Session Recording';
+            }
+            
+            // Update camera status
+            await updateCameraStatus();
+        } else {
+            // Show error message
+            showError(data.message || 'Failed to end session');
+        }
+    } catch (error) {
+        console.error('Failed to end session:', error);
+        showError('Failed to end recording session. Please try again.');
+        
+        // Reset button text
+        if (endSessionBtn) {
+            endSessionBtn.textContent = 'End Session Recording';
+        }
+    } finally {
+        // Update button states
+        updateSessionButtonsState();
+    }
+}
+
+function renderCameraControls() {
+    const container = document.getElementById('camera-controls');
+    if (!container) return;
+    
+    // Clear existing content
+    container.innerHTML = '';
+    
+    // Render each camera
+    cameraStatus.forEach(camera => {
+        const cameraCard = document.createElement('div');
+        cameraCard.className = 'camera-card';
+        
+        // Determine display values based on reachability
+        const recordingStatus = !camera.reachable ? 'Unknown' : camera.recording ? 'Recording' : 'Standby';
+        const recordingClass = !camera.reachable ? 'unknown' : camera.recording ? 'recording' : 'not-recording';
+        const usbStatusText = !camera.reachable ? 'Unknown' : camera.usbStatus;
+        const usbStatusClass = !camera.reachable ? 'unknown' : 
+                              (camera.usbStatus === 'Connected' ? 'usb-connected' : 'usb-disconnected');
+        
+        cameraCard.innerHTML = `
+            <!-- Line 1: Camera Name -->
+            <div class="camera-header">
+                <h2>${camera.name}</h2>
+            </div>
+            
+            <!-- Line 2: Control Buttons -->
+            <div class="camera-controls">
+                <button class="${camera.recording ? 'stop' : 'record'}" 
+                        data-hostname="${camera.hostname}" 
+                        data-action="${camera.recording ? 'stop' : 'record'}"
+                        ${!camera.reachable ? 'disabled' : ''}>
+                    ${camera.recording ? 'Stop Recording' : 'Start Recording'}
+                </button>
+                <button class="refresh-usb" data-hostname="${camera.hostname}"
+                        ${!camera.reachable ? 'disabled' : ''}>
+                    Refresh USB Status
+                </button>
+            </div>
+            
+            <!-- Line 3: Status Indicators -->
+            <div class="camera-status">
+                <div class="status-indicator">
+                    <div class="status-dot ${recordingClass}"></div>
+                    <span>${recordingStatus}</span>
                 </div>
-                <div class="disk-info">
-                    <p><strong>Identifier:</strong> ${disk.identifier}</p>
-                    <p><strong>Size:</strong> ${disk.size}</p>
-                    <p><strong>Mount Point:</strong> ${disk.mountPoint}</p>
-                    <p><strong>BRAW Files:</strong> ${brawFiles.length}</p>
+                <div class="status-indicator">
+                    <div class="status-dot ${usbStatusClass}"></div>
+                    <span>USB: ${usbStatusText}</span>
                 </div>
-                ${brawFiles.length > 0 ? `
-                    <div class="disk-files">
-                        <ul>
-                            ${brawFiles.map(file => `<li>${file.split('/').pop()}</li>`).join('')}
-                        </ul>
-                    </div>
+                ${camera.reachable && camera.usbStatus === 'Connected' ? `
+                <div class="status-indicator">
+                    <span>Remaining: ${camera.remainingRecordHours.toFixed(1)} hours</span>
+                </div>
                 ` : ''}
             </div>
         `;
-    });
-    
-    container.innerHTML = html;
-    
-    // Add event listeners to disk cards
-    document.querySelectorAll('.disk-card').forEach(card => {
-        card.addEventListener('click', function(e) {
-            // Don't toggle if clicking on the checkbox directly
-            if (e.target.classList.contains('disk-select')) return;
-            
-            const checkbox = this.querySelector('.disk-select');
-            checkbox.checked = !checkbox.checked;
-            
-            // Toggle selected class
-            this.classList.toggle('selected', checkbox.checked);
-            
-            // Update matching files and button states when selection changes
-            setTimeout(updateMatchingFiles, 100);
-            updateAllButtonStates();
-        });
         
-        checkbox.addEventListener('change', function() {
-            card.classList.toggle('selected', this.checked);
-            
-            // Update matching files and button states when selection changes
-            setTimeout(updateMatchingFiles, 100);
-            updateAllButtonStates();
-        });
-    });
-}
-
-// Render tasks
-function renderTasks() {
-    const container = document.getElementById('tasks-container');
-    
-    if (tasks.length === 0) {
-        container.innerHTML = '<p class="loading">No tasks available.</p>';
-        return;
-    }
-    
-    let html = '';
-    
-    tasks.forEach(task => {
-        html += `
-            <div class="task-item ${task.selected ? 'selected' : ''}" data-id="${task.id}">
-                <input type="checkbox" class="task-checkbox" ${task.selected ? 'checked' : ''}>
-                <div class="task-info">
-                    <div class="task-name">${task.name}</div>
-                    <div class="task-description">${task.description}</div>
-                </div>
-            </div>
-        `;
+        container.appendChild(cameraCard);
     });
     
-    container.innerHTML = html;
-    
-    // Add event listeners to task items
-    document.querySelectorAll('.task-item').forEach(item => {
-        item.addEventListener('click', function(e) {
-            // Don't toggle if clicking on the checkbox directly
-            if (e.target.classList.contains('task-checkbox')) return;
-            
-            const checkbox = this.querySelector('.task-checkbox');
-            checkbox.checked = !checkbox.checked;
-            
-            // Trigger change event to handle mutual exclusivity
-            checkbox.dispatchEvent(new Event('change', { bubbles: true }));
-        });
-        
-        // Add event listener to checkbox for mutual exclusivity
-        const checkbox = item.querySelector('.task-checkbox');
-        checkbox.addEventListener('change', function() {
-            const taskId = item.dataset.id;
-            const taskGroup = tasks.find(t => t.id === taskId)?.group;
-            
-            if (this.checked) {
-                // If checking a task, uncheck all other tasks in the same group
-                if (taskGroup) {
-                    document.querySelectorAll('.task-checkbox').forEach(otherCheckbox => {
-                        const otherItem = otherCheckbox.closest('.task-item');
-                        const otherTaskId = otherItem.dataset.id;
-                        const otherTask = tasks.find(t => t.id === otherTaskId);
-                        if (otherCheckbox !== this && otherTask && otherTask.group === taskGroup) {
-                            otherCheckbox.checked = false;
-                            otherItem.classList.remove('selected');
-                        }
-                    });
-                }
-                // Mark this item as selected
-                item.classList.add('selected');
-            } else {
-                // Allow unchecking
-                item.classList.remove('selected');
-            }
-        });
+    // Add event listeners to the buttons
+    document.querySelectorAll('[data-action="record"], [data-action="stop"]').forEach(button => {
+        button.addEventListener('click', handleRecordToggle);
     });
     
-    updateAllButtonStates();  // Update all button states after setting up task event listeners
+    document.querySelectorAll('.refresh-usb').forEach(button => {
+        button.addEventListener('click', handleRefreshUSB);
+    });
+    
+    // Re-validate session form whenever camera status changes
+    validateSessionForm();
 }
 
-// Render processing status
-function renderProcessingStatus() {
-    const container = document.getElementById('status-container');
-    const statusMessage = container.querySelector('.status-message');
-    const progressBar = document.getElementById('progress-bar');
-    const errorMessage = document.getElementById('error-message');
+async function handleRecordToggle(event) {
+    const button = event.currentTarget;
+    const hostname = button.dataset.hostname;
+    const action = button.dataset.action;
     
-    statusMessage.textContent = processingStatus.message;
-    progressBar.style.width = `${processingStatus.progress}%`;
-    progressBar.textContent = `${processingStatus.progress}%`;
-    
-    if (processingStatus.error) {
-        errorMessage.textContent = processingStatus.error;
-        errorMessage.style.display = 'block';
-    } else {
-        errorMessage.style.display = 'none';
-    }
-}
-
-// Render matching files
-function renderMatchingFiles() {
-    const container = document.getElementById('matching-files-container');
-    
-    if (Object.keys(matchingFiles).length === 0) {
-        container.innerHTML = '<p class="no-matches">No matching recordings found yet. Select disks to find matches.</p>';
-        return;
-    }
-    
-    let html = '';
-    
-    for (const [base, files] of Object.entries(matchingFiles)) {
-        html += `
-            <div class="matching-group">
-                <div class="matching-group-title">Recording: ${base}</div>
-                <ul class="matching-files-list">
-                    ${files.map(file => `<li>${file}</li>`).join('')}
-                </ul>
-            </div>
-        `;
-    }
-    
-    container.innerHTML = html;
-}
-
-// Start processing
-async function startProcessing() {
-    // Get selected disks
-    const selectedDisks = Array.from(document.querySelectorAll('.disk-select:checked'))
-        .map(checkbox => checkbox.closest('.disk-card').dataset.id);
-    
-    // Get selected tasks
-    const selectedTasks = Array.from(document.querySelectorAll('.task-checkbox:checked'))
-        .map(checkbox => checkbox.closest('.task-item').dataset.id);
-    
-    // Check if at least one disk and one task is selected
-    if (selectedDisks.length === 0) {
-        showError('Please select at least one disk to process.');
-        return;
-    }
-    
-    if (selectedTasks.length === 0) {
-        showError('Please select at least one task to perform.');
-        return;
-    }
+    // Disable the button to prevent multiple clicks
+    button.disabled = true;
     
     try {
-        const response = await fetch('/api/start-processing', {
+        const response = await fetch('/api/camera/record', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                selectedDisks,
-                selectedTasks
+                hostname: hostname,
+                record: action === 'record'
             })
         });
         
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || `Server returned ${response.status}: ${response.statusText}`);
+            throw new Error(`Server returned ${response.status}: ${response.statusText}`);
         }
         
-        // Update status immediately
-        updateProcessingStatus();
-        updateAllButtonStates();  // Update all button states after starting processing
+        // Update the camera status immediately
+        await updateCameraStatus();
     } catch (error) {
-        console.error('Failed to start processing:', error);
-        showError(`Failed to start processing: ${error.message}`);
+        console.error('Failed to toggle recording:', error);
+        showError(`Failed to ${action} recording. Please try again.`);
+    } finally {
+        // Re-enable the button
+        button.disabled = false;
     }
 }
 
-// Find matches manually
-async function findMatchesNow() {
-    // Get selected disks
-    const selectedDisks = Array.from(document.querySelectorAll('.disk-select:checked'))
-        .map(checkbox => checkbox.closest('.disk-card').dataset.id);
+async function handleRefreshUSB(event) {
+    const button = event.currentTarget;
+    const hostname = button.dataset.hostname;
     
-    // Check if at least one disk is selected
-    if (selectedDisks.length === 0) {
-        showError('Please select at least one disk to find matches.');
-        return;
-    }
+    // Disable the button to prevent multiple clicks
+    button.disabled = true;
     
     try {
-        // Update button state
-        const findMatchesButton = document.getElementById('find-matches-button');
-        if (findMatchesButton) {
-            findMatchesButton.textContent = 'Searching...';
-            findMatchesButton.disabled = true;
-        }
-        
-        // Show searching message
-        document.getElementById('matching-files-container').innerHTML = 
-            '<p class="loading">Searching for matching recordings...</p>';
-        
-        const response = await fetch('/api/find-matches', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                selectedDisks
-            })
-        });
+        const response = await fetch(`/api/camera/usb-status?hostname=${encodeURIComponent(hostname)}`);
         
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || `Server returned ${response.status}: ${response.statusText}`);
+            throw new Error(`Server returned ${response.status}: ${response.statusText}`);
         }
         
-        // Update matching files with the response
-        matchingFiles = await response.json();
-        renderMatchingFiles();
-        
-        // Reset button state
-        if (findMatchesButton) {
-            findMatchesButton.textContent = 'Find Matches';
-        }
-        updateFindMatchesButtonState();
+        // Update the camera status immediately
+        await updateCameraStatus();
     } catch (error) {
-        console.error('Failed to find matches:', error);
-        showError(`Failed to find matches: ${error.message}`);
-        
-        // Reset button state with error
-        const findMatchesButton = document.getElementById('find-matches-button');
-        if (findMatchesButton) {
-            findMatchesButton.textContent = 'Find Matches';
-        }
-        updateFindMatchesButtonState();
+        console.error('Failed to refresh USB status:', error);
+        showError('Failed to refresh USB status. Please try again.');
+    } finally {
+        // Re-enable the button
+        button.disabled = false;
     }
 }
 
-// Show error message
+// Settings are now managed through config.yaml file only
+
 function showError(message) {
-    const errorMessage = document.getElementById('error-message');
-    errorMessage.textContent = message;
-    errorMessage.style.display = 'block';
-    
-    // Hide after 5 seconds
-    setTimeout(() => {
-        errorMessage.style.display = 'none';
-    }, 5000);
-}
-
-// Add disk refresh button
-function addDiskRefreshButton() {
-    const container = document.querySelector('.disks-section h2') || 
-                       document.getElementById('disks-container').previousElementSibling;
-    
-    if (container) {
-        // Create refresh button if it doesn't exist
-        if (!document.getElementById('refresh-disks-button')) {
-            const refreshButton = document.createElement('button');
-            refreshButton.id = 'refresh-disks-button';
-            refreshButton.className = 'refresh-button';
-            refreshButton.textContent = 'Scan for Disks';
-            refreshButton.addEventListener('click', updateDiskStatus);
-            
-            // Insert after the heading
-            container.parentNode.insertBefore(refreshButton, container.nextSibling);
-        }
-    }
-}
-
-// Add find matches button
-function addFindMatchesButton() {
-    const container = document.querySelector('.matching-files-section h2') || 
-                       document.getElementById('matching-files-container').previousElementSibling;
-    
-    if (container) {
-        // Create button if it doesn't exist
-        if (!document.getElementById('find-matches-button')) {
-            const findMatchesButton = document.createElement('button');
-            findMatchesButton.id = 'find-matches-button';
-            findMatchesButton.className = 'refresh-button';
-            findMatchesButton.textContent = 'Find Matches';
-            findMatchesButton.addEventListener('click', findMatchesNow);
-            
-            // Insert after the heading
-            container.parentNode.insertBefore(findMatchesButton, container.nextSibling);
-        }
-    }
+    // Simple error display - in a real app, you might use a toast or modal
+    alert(message);
 }
