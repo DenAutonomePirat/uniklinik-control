@@ -1,12 +1,12 @@
 cameras:
   - name: "Camera 1"
     hostname: "172.24.135.80"
-    username: "uniklinik"
-    password: "xJBml4nVqubV"
+    username: ""
+    password: ""
   - name: "Camera 2"
     hostname: "172.24.135.81"
-    username: "uniklinik"
-    password: "xJBml4nVqubV"
+    username: ""
+    password: ""
 
 server:
   port: 8081
