@@ -80,6 +80,7 @@ sudo apt install --no-install-recommends \
   xinit \
   openbox \
   chromium \
+  ffmpeg \
   lightdm -y
 ```
 - **openbox**: Lightweight window manager
@@ -273,3 +274,8 @@ This project is licensed under the [GNU GPL v3 License](https://www.gnu.org/lice
 
 - Based on the [Blackmagic Camera Control REST API](https://documents.blackmagicdesign.com/DeveloperManuals/RESTAPIforBlackmagicCameras.pdf)
 - Inspired by the [BM-API-Tutorial](https://github.com/DylanSpeiser/BM-API-Tutorial)
+
+
+## ToDo
+
+LTC https://elteesee.pehrhovey.net/
