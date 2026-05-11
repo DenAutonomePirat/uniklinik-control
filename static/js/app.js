@@ -7,6 +7,15 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initialize session control form
     initSessionForm();
+
+    // Initialize end session modal
+    initEndSessionModal();
+
+    // Initialize error modal
+    initErrorModal();
+
+    // Initialize disk management controls
+    initDiskManagement();
 });
 
 // Global state to track camera status
@@ -45,6 +54,9 @@ async function updateCameraStatus() {
         
         // Update session buttons state based on camera status
         updateSessionButtonsState();
+
+        // Update format button state based on camera status
+        updateFormatButtonState();
     } catch (error) {
         console.error('Failed to update camera status:', error);
     }
@@ -76,9 +88,14 @@ function updateSessionButtonsState() {
     // Enable end session button if any camera is recording
     endSessionBtn.disabled = !anyRecording;
     
-    // If we're in a recording session, disable the start button
-    if (anyRecording && startSessionBtn.textContent !== 'Recording in progress') {
+    if (anyRecording) {
+        // Lock start button while recording
+        startSessionBtn.disabled = true;
         startSessionBtn.textContent = 'Recording in progress';
+    } else if (startSessionBtn.textContent === 'Recording in progress') {
+        // Cameras have stopped — reset to idle so the user can start a new session
+        startSessionBtn.textContent = 'Start Session Recording';
+        validateSessionForm();
     }
 }
 
@@ -93,25 +110,41 @@ function initSessionForm() {
     
     if (!sessionForm || !startSessionBtn || !endSessionBtn) return;
     
-    // Add input event listeners to update session info
+    // Add input event listeners to update session info.
+    // Strip non-digits and cap length as the user types.
     clientIdInput.addEventListener('input', () => {
-        sessionInfo.clientId = clientIdInput.value.trim();
+        clientIdInput.value = clientIdInput.value.replace(/\D/g, '').slice(0, 4);
+        sessionInfo.clientId = clientIdInput.value;
         validateSessionForm();
     });
-    
+
     psychologistIdInput.addEventListener('input', () => {
-        sessionInfo.psychologistId = psychologistIdInput.value.trim();
+        psychologistIdInput.value = psychologistIdInput.value.replace(/\D/g, '').slice(0, 4);
+        sessionInfo.psychologistId = psychologistIdInput.value;
         validateSessionForm();
     });
-    
+
     sessionNumberInput.addEventListener('input', () => {
-        sessionInfo.sessionNumber = sessionNumberInput.value.trim();
+        sessionNumberInput.value = sessionNumberInput.value.replace(/\D/g, '').slice(0, 2);
+        sessionInfo.sessionNumber = sessionNumberInput.value;
         validateSessionForm();
+    });
+
+    // Auto-pad session number to 2 digits on blur (e.g. "7" → "07")
+    sessionNumberInput.addEventListener('blur', () => {
+        const n = parseInt(sessionNumberInput.value, 10);
+        if (!isNaN(n) && n >= 1 && n <= 99) {
+            sessionNumberInput.value = String(n).padStart(2, '0');
+            sessionInfo.sessionNumber = sessionNumberInput.value;
+            validateSessionForm();
+        }
     });
     
     // Add session button click handlers
     startSessionBtn.addEventListener('click', handleStartSession);
-    endSessionBtn.addEventListener('click', handleEndSession);
+    endSessionBtn.addEventListener('click', () => {
+        document.getElementById('end-session-modal').classList.add('visible');
+    });
     
     // Initial validation
     validateSessionForm();
@@ -122,60 +155,63 @@ function validateSessionForm() {
     const startSessionBtn = document.getElementById('start-session');
     const validationMessages = document.getElementById('validation-messages');
     if (!startSessionBtn || !validationMessages) return;
-    
+
     // Clear previous validation messages
     validationMessages.innerHTML = '';
-    
-    // Collect all validation issues
-    const issues = [];
-    
-    // Check if all fields are filled
-    if (sessionInfo.clientId === '') {
-        issues.push('Klient ID er påkrævet');
+
+    // Helper to set/clear a per-field inline error span
+    const setFieldError = (id, msg) => {
+        const el = document.getElementById(id + '-error');
+        if (el) el.textContent = msg;
+    };
+
+    // Clear all field errors first
+    setFieldError('psychologist-id', '');
+    setFieldError('client-id', '');
+    setFieldError('session-number', '');
+
+    // Validate fields and show errors inline next to their inputs
+    let isValid = true;
+
+    if (!/^\d{4}$/.test(sessionInfo.psychologistId)) {
+        setFieldError('psychologist-id', 'Psykolog ID skal være et 4-cifret tal');
+        isValid = false;
     }
-    
-    if (sessionInfo.psychologistId === '') {
-        issues.push('Psykolog ID er påkrævet');
+
+    if (!/^\d{4}$/.test(sessionInfo.clientId)) {
+        setFieldError('client-id', 'Klient ID skal være et 4-cifret tal');
+        isValid = false;
     }
-    
-    if (sessionInfo.sessionNumber === '') {
-        issues.push('Sessions nummer er påkrævet');
+
+    const sn = parseInt(sessionInfo.sessionNumber, 10);
+    if (!sessionInfo.sessionNumber || isNaN(sn) || sn < 1 || sn > 99) {
+        setFieldError('session-number', 'Sessions nummer skal være et tal mellem 1 og 99');
+        isValid = false;
     }
-    
-    const isValid = issues.length === 0;
-    
-    // Check camera conditions
+
+    // Check camera conditions — not field-specific, stay in validation-messages
     const cameraIssues = [];
-    
-    // Check if there are any cameras
+
     if (cameraStatus.length === 0) {
         cameraIssues.push('Ingen kameraer fundet');
-    
+
     } else {
-        // Check each camera's conditions
         cameraStatus.forEach(camera => {
             if (!camera.reachable) {
                 cameraIssues.push(`${camera.name} er ikke tilgængelig`);
-            } else if (camera.recording) {
-                cameraIssues.push(`${camera.name} optager allerede`);
             } else if (camera.usbStatus !== 'Connected') {
                 cameraIssues.push(`${camera.name} har ingen USB-disk tilsluttet`);
-            } else if (camera.remainingRecordHours < 1.0) {
-                cameraIssues.push(`${camera.name} har mindre end 1 times optagetid tilbage`);
+            } else if (camera.remainingRecordHours < 0.5) {
+                cameraIssues.push(`${camera.name} har mindre end 30 minutter optagetid tilbage`);
             }
         });
     }
-    
-    const hasAvailableCameras = cameraIssues.length === 0;
-    
-    // Add all issues to the validation messages
-    [...issues, ...cameraIssues].forEach(issue => {
+
+    cameraIssues.forEach(issue => {
         const messageElement = document.createElement('p');
         messageElement.textContent = issue;
         validationMessages.appendChild(messageElement);
     });
-    
-
 
     // Enable or disable button based on validation
     // startSessionBtn.disabled = !isValid || !hasAvailableCameras;
@@ -185,9 +221,7 @@ function validateSessionForm() {
     // update the button text
     if (startSessionBtn.disabled) {
         startSessionBtn.textContent = 'Start Session Recording';
-    }   
-
-
+    }
 }
 
 async function handleStartSession() {
@@ -224,13 +258,26 @@ async function handleStartSession() {
             // Schedule status update after pre-roll
             setTimeout(async () => {
                 await updateCameraStatus();
-                if (startSessionBtn) {
-                    startSessionBtn.textContent = 'Recording in progress';
+
+                // Confirm cameras actually started recording
+                const recording = cameraStatus.filter(c => c.recording);
+                if (recording.length === 0) {
+                    showError(
+                        'Recording did not start — a clip with this name already exists. ' +
+                        'You may have two active sessions, or a previous session was interrupted. ' +
+                        'Please increase the session number manually.'
+                    );
+                    if (startSessionBtn) {
+                        startSessionBtn.textContent = 'Start Session Recording';
+                        startSessionBtn.disabled = false;
+                    }
+                    validateSessionForm();
+                    return;
                 }
-                // Enable end session button after pre-roll
-                if (endSessionBtn) {
-                    endSessionBtn.disabled = false;
-                }
+
+                if (startSessionBtn) startSessionBtn.textContent = 'Recording in progress';
+                if (endSessionBtn)   endSessionBtn.disabled = false;
+
             }, (preRollSeconds + 1) * 1000);
         } else {
             // Show error message if any
@@ -253,51 +300,29 @@ async function handleStartSession() {
     }
 }
 
-// Show pre-roll countdown
+// Show pre-roll countdown on the start session button
 function showPrerollCountdown(seconds) {
-    const validationMessages = document.getElementById('validation-messages');
-    if (!validationMessages) return;
-    
-    // Clear previous messages
-    validationMessages.innerHTML = '';
-    
-    // Create countdown element
-    const countdownElement = document.createElement('div');
-    countdownElement.className = 'preroll-countdown';
-    countdownElement.innerHTML = `<p>Preparing timecode. Recording starts in <span id="countdown">${seconds}</span> seconds...</p>`;
-    validationMessages.appendChild(countdownElement);
-    
-    // Start countdown
-    const countdownSpan = document.getElementById('countdown');
+    const startSessionBtn = document.getElementById('start-session');
+    if (!startSessionBtn) return;
+
     let timeLeft = seconds;
-    
+    startSessionBtn.textContent = `Recording starts in ${timeLeft}s...`;
+
     const interval = setInterval(() => {
         timeLeft--;
-        if (countdownSpan) {
-            countdownSpan.textContent = timeLeft;
-        }
-        
-        if (timeLeft <= 0) {
+        if (timeLeft > 0) {
+            startSessionBtn.textContent = `Recording starts in ${timeLeft}s...`;
+        } else {
             clearInterval(interval);
-            if (countdownElement) {
-                countdownElement.innerHTML = '<p>Recording in progress with synchronized timecode...</p>';
-            }
-            
-            // Enable the end session button
-            const endSessionBtn = document.getElementById('end-session');
-            if (endSessionBtn) {
-                endSessionBtn.disabled = false;
-            }
         }
     }, 1000);
 }
 
 // Handle end session button click
 async function handleEndSession() {
-    // Show confirmation dialog
-    if (!confirm('Are you sure you want to end the recording session? This will stop recording on all cameras and stop the timecode.')) {
-        return; // User cancelled
-    }
+    // Close the modal if open
+    const modal = document.getElementById('end-session-modal');
+    if (modal) modal.classList.remove('visible');
     
     const endSessionBtn = document.getElementById('end-session');
     const startSessionBtn = document.getElementById('start-session');
@@ -339,8 +364,9 @@ async function handleEndSession() {
                 endSessionBtn.textContent = 'End Session Recording';
             }
             
-            // Update camera status
+            // Update camera status then re-enable start button based on form validity
             await updateCameraStatus();
+            validateSessionForm();
         } else {
             // Show error message
             showError(data.message || 'Failed to end session');
@@ -494,7 +520,111 @@ async function handleRefreshUSB(event) {
 
 // Settings are now managed through config.yaml file only
 
+// Update the state of the format disks button based on camera status.
+// Disabled only while any camera is actively recording — the backend
+// validates disk presence before executing the format.
+function updateFormatButtonState() {
+    const formatBtn = document.getElementById('format-disks');
+    if (!formatBtn) return;
+
+    const anyRecording = cameraStatus.length > 0 &&
+        cameraStatus.some(c => c.recording);
+    formatBtn.disabled = anyRecording;
+}
+
+// Initialize end session modal wiring.
+function initEndSessionModal() {
+    const modal      = document.getElementById('end-session-modal');
+    const overlay    = document.getElementById('end-session-modal-overlay');
+    const confirmBtn = document.getElementById('end-session-confirm');
+    const cancelBtn  = document.getElementById('end-session-cancel');
+
+    if (!modal || !confirmBtn || !cancelBtn) return;
+
+    cancelBtn.addEventListener('click', () => modal.classList.remove('visible'));
+    overlay.addEventListener('click',   () => modal.classList.remove('visible'));
+    confirmBtn.addEventListener('click', handleEndSession);
+}
+
+// Initialize disk management button and modal wiring.
+function initDiskManagement() {    const formatBtn     = document.getElementById('format-disks');
+    const modal         = document.getElementById('format-modal');
+    const overlay       = document.getElementById('format-modal-overlay');
+    const confirmBtn    = document.getElementById('format-confirm');
+    const cancelBtn     = document.getElementById('format-cancel');
+
+    if (!formatBtn || !modal || !confirmBtn || !cancelBtn) return;
+
+    // Open modal on button click
+    formatBtn.addEventListener('click', () => {
+        modal.classList.add('visible');
+    });
+
+    // Close modal on cancel or overlay click
+    cancelBtn.addEventListener('click', closeFormatModal);
+    overlay.addEventListener('click', closeFormatModal);
+
+    // Execute format on confirm
+    confirmBtn.addEventListener('click', handleFormatDisks);
+}
+
+function closeFormatModal() {
+    const modal = document.getElementById('format-modal');
+    if (modal) modal.classList.remove('visible');
+}
+
+async function handleFormatDisks() {
+    closeFormatModal();
+
+    const formatBtn   = document.getElementById('format-disks');
+    const statusDiv   = document.getElementById('format-status');
+
+    if (formatBtn) {
+        formatBtn.disabled = true;
+        formatBtn.textContent = 'Formatting…';
+    }
+    if (statusDiv) {
+        statusDiv.innerHTML = '<p class="format-progress">Formatting disks — this may take several minutes…</p>';
+    }
+
+    try {
+        const response = await fetch('/api/disks/format', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            if (statusDiv) {
+                statusDiv.innerHTML = '<p class="format-success">Both disks formatted successfully.</p>';
+            }
+        } else {
+            if (statusDiv) {
+                statusDiv.innerHTML = `<p class="format-error">${data.message}</p>`;
+            }
+        }
+    } catch (error) {
+        console.error('Format request failed:', error);
+        if (statusDiv) {
+            statusDiv.innerHTML = '<p class="format-error">Format request failed. Check server connection.</p>';
+        }
+    } finally {
+        if (formatBtn) formatBtn.textContent = 'Format Both Disks';
+        await updateCameraStatus();
+    }
+}
+
+function initErrorModal() {
+    const modal   = document.getElementById('error-modal');
+    const overlay = document.getElementById('error-modal-overlay');
+    const okBtn   = document.getElementById('error-modal-ok');
+    if (!modal || !okBtn) return;
+    okBtn.addEventListener('click',   () => modal.classList.remove('visible'));
+    overlay.addEventListener('click', () => modal.classList.remove('visible'));
+}
+
 function showError(message) {
-    // Simple error display - in a real app, you might use a toast or modal
-    alert(message);
+    document.getElementById('error-modal-message').textContent = message;
+    document.getElementById('error-modal').classList.add('visible');
 }

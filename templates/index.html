@@ -11,8 +11,7 @@
 <body>
     <header>
         <h1>Dual Camera Controller</h1>
-        <div id="connection-status" class="disconnected">Disconnected</div>
-    </header>
+   </header>
 
     <main>
         <div class="session-container">
@@ -20,16 +19,19 @@
             <div id="session-control" class="section">
                 <form id="session-form">
                     <div class="form-group">
-                        <label for="client-id">Klient ID</label>
-                        <input type="text" id="client-id" name="client-id" required>
-                    </div>
-                    <div class="form-group">
                         <label for="psychologist-id">Psykolog ID</label>
                         <input type="text" id="psychologist-id" name="psychologist-id" required>
+                        <span class="field-error" id="psychologist-id-error"></span>
+                    </div>
+                    <div class="form-group">
+                        <label for="client-id">Klient ID</label>
+                        <input type="text" id="client-id" name="client-id" required>
+                        <span class="field-error" id="client-id-error"></span>
                     </div>
                     <div class="form-group">
                         <label for="session-number">Sessions nummer</label>
                         <input type="text" id="session-number" name="session-number" required>
+                        <span class="field-error" id="session-number-error"></span>
                     </div>
                     <div id="validation-messages" class="validation-messages"></div>
                     <div class="session-buttons">
@@ -44,7 +46,55 @@
                     <!-- Camera controls will be dynamically generated here -->
                 </div>
             </div>
+
+            <div class="disk-management">
+                <h2 class="section-title">Disk Management</h2>
+                <div class="section">
+                    <p class="disk-warning">Formats both camera disks to ExFAT. All recorded data will be permanently erased.</p>
+                    <button type="button" id="format-disks">Format Both Disks</button>
+                    <div id="format-status"></div>
+                </div>
+            </div>
     </main>
+
+    <!-- Format confirmation modal -->
+    <div id="format-modal" class="modal">
+        <div class="modal-overlay" id="format-modal-overlay"></div>
+        <div class="modal-content">
+            <h3>Format Both Disks?</h3>
+            <p>This will permanently erase <strong>all recorded data</strong> on both camera disks.</p>
+            <p>This action cannot be undone.</p>
+            <div class="modal-buttons">
+                <button id="format-cancel">Cancel</button>
+                <button id="format-confirm" class="btn-danger">Format Both Disks</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- End session confirmation modal -->
+    <div id="end-session-modal" class="modal">
+        <div class="modal-overlay" id="end-session-modal-overlay"></div>
+        <div class="modal-content">
+            <h3>End Session Recording?</h3>
+            <p>This will stop recording on all cameras and stop the timecode.</p>
+            <div class="modal-buttons">
+                <button id="end-session-cancel">Cancel</button>
+                <button id="end-session-confirm" class="btn-danger">End Session</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error modal -->
+    <div id="error-modal" class="modal">
+        <div class="modal-overlay" id="error-modal-overlay"></div>
+        <div class="modal-content">
+            <h3>Error</h3>
+            <p id="error-modal-message"></p>
+            <div class="modal-buttons">
+                <button id="error-modal-ok">OK</button>
+            </div>
+        </div>
+    </div>
 
     <footer>
         <p> Universitets klinikken 2026 </p>

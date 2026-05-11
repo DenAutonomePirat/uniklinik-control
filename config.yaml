@@ -1,13 +1,16 @@
+room: 
+  - name: "TERAPI1"
+
 cameras:
-  - name: "Camera 1"
+  - name: "CAM1"
     hostname: "172.24.135.80"
-    username: ""
-    password: ""
-  - name: "Camera 2"
+    username: "uniklinik"
+    password: "xJBml4nVqubV"
+  - name: "CAM2"
     hostname: "172.24.135.81"
     username: ""
     password: ""
-
+    
 server:
   port: 8081
   host: "localhost"
